@@ -47,24 +47,11 @@ Analyze the current code and modify it to fulfill the user's request. Follow the
 
 export async function createAIServiceComponent({ config }: Pick<AppComponents, 'config'>): Promise<IAIServiceComponent> {
   const anthropicApiKey = await config.getString('ANTHROPIC_API_KEY')
-
   const anthropic = new Anthropic({ apiKey: anthropicApiKey })
 
-  return {
-    async generateSceneModification(
-      prompt: string,
-      currentFiles: SceneFiles,
-      conversationHistory: ConversationMessage[]
-    ): Promise<{ files: SceneFiles; explanation: string }> {
-      const messages = buildMessages(prompt, currentFiles, conversationHistory)
-
-      // ALWAYS use full docs with prompt caching (cache lasts ~5 minutes)
-      // This way EVERY new scene benefits from cached docs, not just follow-ups
-      const docs = await fetchDecentralandDocs()
-      const isFirstMessage = conversationHistory.length === 0
-
-      // Build system prompt with cacheable documentation
-      const baseInstructions = `You are an expert Decentraland SDK 7 developer. Your job is to modify scene code based on user requests.
+  // Build system prompt ONCE on startup and reuse for all requests (critical for cache hits!)
+  const docs = await fetchDecentralandDocs()
+  const baseInstructions = `You are an expert Decentraland SDK 7 developer. Your job is to modify scene code based on user requests.
 
 IMPORTANT RULES:
 1. Always use Decentraland SDK 7 syntax (NOT SDK 6)
@@ -83,6 +70,38 @@ Response format (JSON):
   },
   "explanation": "Brief explanation of changes made"
 }`
+
+  // This exact object is reused for every request - critical for Anthropic cache to work!
+  const systemPrompt = [
+    {
+      type: 'text' as const,
+      text: baseInstructions
+    },
+    {
+      type: 'text' as const,
+      text: `---
+
+# OFFICIAL DECENTRALAND SDK 7 REFERENCE
+
+${docs.reference}
+
+---
+
+# OFFICIAL DECENTRALAND SDK 7 EXAMPLES
+
+${docs.examples}`,
+      cache_control: { type: 'ephemeral' as const }
+    }
+  ]
+
+  return {
+    async generateSceneModification(
+      prompt: string,
+      currentFiles: SceneFiles,
+      conversationHistory: ConversationMessage[]
+    ): Promise<{ files: SceneFiles; explanation: string }> {
+      const messages = buildMessages(prompt, currentFiles, conversationHistory)
+      const isFirstMessage = conversationHistory.length === 0
 
       // Log what we're sending
       console.log('\n========================================')
@@ -103,28 +122,8 @@ Response format (JSON):
         const message = await anthropic.messages.create({
           model: 'claude-sonnet-4-20250514',
           max_tokens: 8000,
-          // Use array format for system with cache_control
-          system: [
-            {
-              type: 'text',
-              text: baseInstructions
-            },
-            {
-              type: 'text',
-              text: `---
-
-# OFFICIAL DECENTRALAND SDK 7 REFERENCE
-
-${docs.reference}
-
----
-
-# OFFICIAL DECENTRALAND SDK 7 EXAMPLES
-
-${docs.examples}`,
-              cache_control: { type: 'ephemeral' }
-            }
-          ],
+          // Reuse the EXACT same system prompt object for cache hits
+          system: systemPrompt,
           messages
         })
 
