@@ -1,0 +1,13 @@
+{
+  "name": "decentraland-runtime-editor",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "cd client && npm install && cd ../server && npm install",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run start:dev",
+    "dev": "npm run dev:client & npm run dev:server",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build"
+  }
+}
