@@ -12,18 +12,18 @@ export async function getSnapshotHandler(
   const logger = logs.getLogger('get-snapshot')
 
   try {
-    const messageIndex = parseInt(params.messageIndex, 10)
+    const messageId = params.messageId
 
-    if (isNaN(messageIndex)) {
+    if (!messageId) {
       return {
         status: 400,
-        body: { error: 'Invalid message index' }
+        body: { error: 'Message ID is required' }
       }
     }
 
-    const files = await sceneStorage.getMessageSnapshot(params.sceneId, messageIndex)
+    const files = await sceneStorage.getMessageSnapshot(params.sceneId, messageId)
 
-    logger.info(`Retrieved snapshot ${messageIndex} for scene ${params.sceneId}`)
+    logger.info(`Retrieved snapshot ${messageId} for scene ${params.sceneId}`)
 
     return {
       status: 200,
@@ -49,24 +49,24 @@ export async function revertSnapshotHandler(
   const logger = logs.getLogger('revert-snapshot')
 
   try {
-    const messageIndex = parseInt(params.messageIndex, 10)
+    const messageId = params.messageId
 
-    if (isNaN(messageIndex)) {
+    if (!messageId) {
       return {
         status: 400,
-        body: { error: 'Invalid message index' }
+        body: { error: 'Message ID is required' }
       }
     }
 
-    const scene = await sceneStorage.revertToSnapshot(params.sceneId, messageIndex)
+    const scene = await sceneStorage.revertToSnapshot(params.sceneId, messageId)
 
-    logger.info(`Reverted scene ${params.sceneId} to snapshot ${messageIndex}`)
+    logger.info(`Reverted scene ${params.sceneId} to snapshot ${messageId}`)
 
     return {
       status: 200,
       body: {
         scene,
-        message: `Reverted to snapshot ${messageIndex}`
+        message: `Reverted to snapshot ${messageId}`
       }
     }
   } catch (error: any) {

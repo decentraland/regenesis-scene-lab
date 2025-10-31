@@ -23,6 +23,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
     "@dcl-regenesislabs/bevy-explorer-web": "^0.1.0-18913559337.commit-f04220d",
+    "@dcl/hashing": "^3.0.5-11371204748.commit-66a894c",
+    "@dcl/protocol": "^1.0.0-2569677750.commit-6ce832a",
+    "@dcl/schemas": "^19.6.0",
+    "@dcl/sdk-commands": "^7.12.0",
     "@well-known-components/env-config-provider": "^1.2.0",
     "@well-known-components/http-server": "^2.1.0",
     "@well-known-components/interfaces": "^1.5.1",

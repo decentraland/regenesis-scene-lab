@@ -61,8 +61,8 @@ export const api = {
     return response.json()
   },
 
-  async getSnapshot(sceneId: string, messageIndex: number): Promise<{ files: SceneFiles }> {
-    const response = await fetch(`${API_URL}/api/scenes/${sceneId}/snapshot/${messageIndex}`)
+  async getSnapshot(sceneId: string, messageId: string): Promise<{ files: SceneFiles }> {
+    const response = await fetch(`${API_URL}/api/scenes/${sceneId}/snapshot/${messageId}`)
     if (!response.ok) {
       const error = await response.json()
       throw new Error(error.error || 'Failed to get snapshot')
@@ -70,8 +70,8 @@ export const api = {
     return response.json()
   },
 
-  async revertToSnapshot(sceneId: string, messageIndex: number): Promise<{ scene: Scene; message: string }> {
-    const response = await fetch(`${API_URL}/api/scenes/${sceneId}/revert/${messageIndex}`, {
+  async revertToSnapshot(sceneId: string, messageId: string): Promise<{ scene: Scene; message: string }> {
+    const response = await fetch(`${API_URL}/api/scenes/${sceneId}/revert/${messageId}`, {
       method: 'POST'
     })
     if (!response.ok) {

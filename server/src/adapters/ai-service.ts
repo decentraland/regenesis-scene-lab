@@ -1,7 +1,18 @@
 import Anthropic from '@anthropic-ai/sdk'
-import { SceneFiles, IAIServiceComponent, ConversationMessage, AppComponents } from '../types'
+import { SceneFiles, ConversationMessage, AppComponents } from '../types'
 import { fetchDecentralandDocs } from '../logic/dcl-documentation'
 import { parseAIResponse } from '../logic/parse-ai-response'
+
+export type IAIServiceComponent = {
+  generateSceneModification(
+    prompt: string,
+    currentFiles: SceneFiles,
+    conversationHistory: ConversationMessage[]
+  ): Promise<{
+    files: SceneFiles
+    explanation: string
+  }>
+}
 
 function buildMessages(
   prompt: string,
@@ -61,7 +72,7 @@ IMPORTANT RULES:
 5. Return ONLY the modified files in JSON format
 6. After returning, read again the file and find errors or unused vars. Remove all unused code.
 7. Never import anything from react. Use always @dcl/sdk/react-ecs
-
+8. NEVER but NEVER use external libraries. @dcl/sdk/utils is a NO-GO for this. We can't install external npm libraries.
 Response format (JSON):
 {
   "files": {

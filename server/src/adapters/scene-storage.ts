@@ -1,6 +1,37 @@
-import { ISceneStorageComponent, Scene, SceneFiles, ConversationMessage } from '../types'
+import { Scene, SceneFiles, ConversationMessage } from '../types'
+import { exportSceneInMemory } from '../logic/scene-export'
+
+export type ISceneStorageComponent = {
+  createFromTemplate(templateId: string, name: string): Promise<Scene>
+  getScene(sceneId: string): Promise<Scene | null>
+  updateScene(sceneId: string, files: SceneFiles): Promise<Scene>
+  addConversationMessage(sceneId: string, message: ConversationMessage): Promise<Scene>
+  resetConversation(sceneId: string): Promise<Scene>
+  getMessageSnapshot(sceneId: string, messageId: string): Promise<SceneFiles>
+  revertToSnapshot(sceneId: string, messageId: string): Promise<Scene>
+  exportScene(sceneId: string, baseUrl: string): Promise<Scene>
+  exportSnapshot(sceneId: string, messageId: string, baseUrl: string): Promise<Scene>
+  deleteScene(sceneId: string): Promise<void>
+  listScenes(): Promise<Scene[]>
+}
 
 const DEFAULT_TEMPLATE: SceneFiles = {
+  'scene.json': JSON.stringify(
+    {
+      main: 'bin/index.js',
+      runtimeVersion: '7',
+      display: {
+        title: 'My Scene',
+        favicon: 'favicon_asset'
+      },
+      scene: {
+        parcels: ['0,0'],
+        base: '0,0'
+      }
+    },
+    null,
+    2
+  ),
   'package.json': JSON.stringify(
     {
       name: 'dcl-scene',
@@ -8,6 +39,26 @@ const DEFAULT_TEMPLATE: SceneFiles = {
       dependencies: {
         '@dcl/sdk': '^7.11.2'
       }
+    },
+    null,
+    2
+  ),
+  'tsconfig.json': JSON.stringify(
+    {
+      compilerOptions: {
+        target: 'ES2020',
+        module: 'ESNext',
+        moduleResolution: 'node',
+        strict: true,
+        esModuleInterop: true,
+        skipLibCheck: true,
+        forceConsistentCasingInFileNames: true,
+        resolveJsonModule: true,
+        jsx: 'react',
+        jsxFactory: 'ReactEcs.createElement'
+      },
+      include: ['src/**/*'],
+      exclude: ['node_modules', 'bin']
     },
     null,
     2
@@ -81,6 +132,7 @@ export function createSceneStorageComponent(): ISceneStorageComponent {
         name,
         files: { ...template },
         conversation: [],
+        snapshotExports: new Map(),
         createdAt: new Date(),
         updatedAt: new Date()
       }
@@ -129,34 +181,93 @@ export function createSceneStorageComponent(): ISceneStorageComponent {
       return scene
     },
 
-    async getMessageSnapshot(sceneId: string, messageIndex: number): Promise<SceneFiles> {
+    async getMessageSnapshot(sceneId: string, messageId: string): Promise<SceneFiles> {
       const scene = scenes.get(sceneId)
       if (!scene) {
         throw new Error(`Scene ${sceneId} not found`)
       }
 
-      if (messageIndex < 0 || messageIndex >= scene.conversation.length) {
-        throw new Error(`Message index ${messageIndex} out of bounds`)
+      const message = scene.conversation.find((msg) => msg.id === messageId)
+      if (!message) {
+        throw new Error(`Message ${messageId} not found in scene ${sceneId}`)
       }
 
-      return { ...scene.conversation[messageIndex].filesSnapshot }
+      return { ...message.filesSnapshot }
     },
 
-    async revertToSnapshot(sceneId: string, messageIndex: number): Promise<Scene> {
+    async revertToSnapshot(sceneId: string, messageId: string): Promise<Scene> {
       const scene = scenes.get(sceneId)
       if (!scene) {
         throw new Error(`Scene ${sceneId} not found`)
       }
 
-      if (messageIndex < 0 || messageIndex >= scene.conversation.length) {
-        throw new Error(`Message index ${messageIndex} out of bounds`)
+      const message = scene.conversation.find((msg) => msg.id === messageId)
+      if (!message) {
+        throw new Error(`Message ${messageId} not found in scene ${sceneId}`)
       }
 
-      // Get the snapshot files
-      const snapshotFiles = scene.conversation[messageIndex].filesSnapshot
-
       // Update scene files to match snapshot
-      scene.files = { ...snapshotFiles }
+      scene.files = { ...message.filesSnapshot }
+      scene.updatedAt = new Date()
+      scenes.set(sceneId, scene)
+
+      return scene
+    },
+
+    async exportScene(sceneId: string, baseUrl: string): Promise<Scene> {
+      const scene = scenes.get(sceneId)
+      if (!scene) {
+        throw new Error(`Scene ${sceneId} not found`)
+      }
+
+      // Build if no built files exist
+      if (!scene.builtFiles) {
+        const { buildScene } = await import('../logic/scene-build')
+        const buildResult = await buildScene(sceneId, scene.files)
+
+        if (!buildResult.success) {
+          throw new Error(`Build failed: ${buildResult.stderr}`)
+        }
+
+        scene.builtFiles = buildResult.builtFiles
+      }
+
+      // Export scene in-memory (hash files, create entity, generate /about)
+      // Use built files instead of source files
+      const exported = await exportSceneInMemory(sceneId, scene.builtFiles, baseUrl)
+
+      // Store export in scene
+      scene.export = {
+        entityId: exported.entityId,
+        hashedFiles: exported.hashedFiles,
+        about: exported.about
+      }
+      scene.updatedAt = new Date()
+      scenes.set(sceneId, scene)
+
+      return scene
+    },
+
+    async exportSnapshot(sceneId: string, messageId: string, baseUrl: string): Promise<Scene> {
+      const scene = scenes.get(sceneId)
+      if (!scene) {
+        throw new Error(`Scene ${sceneId} not found`)
+      }
+
+      const message = scene.conversation.find((msg) => msg.id === messageId)
+      if (!message) {
+        throw new Error(`Message ${messageId} not found in scene ${sceneId}`)
+      }
+
+      // Export snapshot files in-memory
+      const exported = await exportSceneInMemory(`${sceneId}-${messageId}`, message.filesSnapshot, baseUrl)
+
+      // Store snapshot export
+      scene.snapshotExports.set(messageId, {
+        entityId: exported.entityId,
+        hashedFiles: exported.hashedFiles,
+        about: exported.about
+      })
       scene.updatedAt = new Date()
       scenes.set(sceneId, scene)
 
