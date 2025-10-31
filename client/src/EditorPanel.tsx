@@ -1,19 +1,44 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Editor from '@monaco-editor/react'
 import { SceneFiles } from './types'
 import { useMonacoSetup } from './monaco-config'
 
 interface EditorPanelProps {
+  sceneId: string
   files: SceneFiles
   onFileChange: (path: string, content: string) => void
   onBuild: () => void
   isBuilding: boolean
+  viewingSnapshotId: string | null
 }
 
-export function EditorPanel({ files, onFileChange, onBuild, isBuilding }: EditorPanelProps) {
+export function EditorPanel({ sceneId, files, onFileChange, onBuild, isBuilding, viewingSnapshotId }: EditorPanelProps) {
   const [activeFile, setActiveFile] = useState<string>('/src/index.ts')
   const [viewMode, setViewMode] = useState<'code' | 'preview'>('code')
+  const [previewKey, setPreviewKey] = useState<number>(Date.now())
   const { beforeMount } = useMonacoSetup(files)
+
+  // Update preview key when files change (to force iframe remount)
+  useEffect(() => {
+    if (!viewingSnapshotId) {
+      // Only update for current scene, not snapshots
+      setPreviewKey(Date.now())
+    }
+  }, [files, viewingSnapshotId])
+
+  // Construct preview URL
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+  const realmUrl = viewingSnapshotId
+    ? `${apiUrl}/scenes/${sceneId}/snapshots/${viewingSnapshotId}`
+    : `${apiUrl}/scenes/${sceneId}`
+  const previewUrl = `${apiUrl}/bevy-explorer/?initialRealm=${realmUrl}`
+
+  // Log preview URL when it changes
+  useEffect(() => {
+    console.log('🎮 Preview URL:', previewUrl)
+    console.log('📍 Realm URL:', realmUrl)
+    console.log('🔍 Viewing:', viewingSnapshotId ? `Snapshot ${viewingSnapshotId}` : 'Current scene')
+  }, [previewUrl, realmUrl, viewingSnapshotId])
 
   const fileList = Object.keys(files).sort()
   const currentContent = files[activeFile] || ''
@@ -222,7 +247,8 @@ export function EditorPanel({ files, onFileChange, onBuild, isBuilding }: Editor
         {/* Bevy Explorer Iframe */}
         <div style={{ flex: 1, position: 'relative' }}>
           <iframe
-            src={`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/bevy-explorer/?initialRealm=http://localhost:8000`}
+            key={viewingSnapshotId || previewKey} // Force remount when snapshot or files change
+            src={previewUrl}
             style={{
               width: '100%',
               height: '100%',

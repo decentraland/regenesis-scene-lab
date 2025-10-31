@@ -4,14 +4,14 @@ import { Message } from './types'
 interface PromptPanelProps {
   onPromptSubmit: (prompt: string) => void
   onResetConversation: () => void
-  onViewSnapshot: (messageIndex: number) => void
-  onRevertSnapshot: (messageIndex: number) => void
+  onViewSnapshot: (messageId: string) => void
+  onRevertSnapshot: (messageId: string) => void
   messages: Message[]
   isProcessing: boolean
-  viewingSnapshotIndex: number | null
+  viewingSnapshotId: string | null
 }
 
-export function PromptPanel({ onPromptSubmit, onResetConversation, onViewSnapshot, onRevertSnapshot, messages, isProcessing, viewingSnapshotIndex }: PromptPanelProps) {
+export function PromptPanel({ onPromptSubmit, onResetConversation, onViewSnapshot, onRevertSnapshot, messages, isProcessing, viewingSnapshotId }: PromptPanelProps) {
   const [input, setInput] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -88,8 +88,8 @@ export function PromptPanel({ onPromptSubmit, onResetConversation, onViewSnapsho
             </p>
           </div>
         ) : (
-          messages.map((message, index) => {
-            const isViewing = viewingSnapshotIndex === index
+          messages.map((message) => {
+            const isViewing = viewingSnapshotId === message.id
             return (
               <div
                 key={message.id}
@@ -117,10 +117,10 @@ export function PromptPanel({ onPromptSubmit, onResetConversation, onViewSnapsho
                   }}>
                     {message.role === 'user' ? 'You' : 'AI'}
                   </div>
-                  {message.messageIndex !== undefined && (
+                  {message.role === 'assistant' && (
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button
-                        onClick={() => onViewSnapshot(message.messageIndex!)}
+                        onClick={() => onViewSnapshot(message.id)}
                         disabled={isProcessing || isViewing}
                         style={{
                           padding: '4px 8px',
@@ -137,7 +137,7 @@ export function PromptPanel({ onPromptSubmit, onResetConversation, onViewSnapsho
                         {isViewing ? 'Viewing' : 'View'}
                       </button>
                       <button
-                        onClick={() => onRevertSnapshot(message.messageIndex!)}
+                        onClick={() => onRevertSnapshot(message.id)}
                         disabled={isProcessing}
                         style={{
                           padding: '4px 8px',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { PromptPanel } from './PromptPanel'
 import { EditorPanel } from './EditorPanel'
 import { api } from './api'
@@ -6,14 +6,21 @@ import { Scene, Message, SceneFiles } from './types'
 
 export function App() {
   const [scene, setScene] = useState<Scene | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [isBuilding, setIsBuilding] = useState(false)
-  const [viewingSnapshotIndex, setViewingSnapshotIndex] = useState<number | null>(null)
+  const [viewingSnapshotId, setViewingSnapshotId] = useState<string | null>(null)
   const [snapshotFiles, setSnapshotFiles] = useState<SceneFiles | null>(null)
+  const isInitialized = useRef(false)
+
+  // Get messages from scene conversation
+  const messages = scene?.conversation || []
 
   // Initialize: Create scene from template on mount
   useEffect(() => {
+    // Prevent double initialization (React StrictMode in dev runs effects twice)
+    if (isInitialized.current) return
+    isInitialized.current = true
+
     const initScene = async () => {
       try {
         const newScene = await api.createScene('My First Scene')
@@ -29,48 +36,35 @@ export function App() {
     if (!scene) return
 
     // Clear snapshot view when submitting new prompt
-    setViewingSnapshotIndex(null)
+    setViewingSnapshotId(null)
     setSnapshotFiles(null)
+    setIsProcessing(true)
 
-    // Calculate message indices (user message will be next index, AI message will be next + 1)
-    const nextIndex = messages.length
-
-    // Add user message
-    const userMessage: Message = {
-      id: Date.now().toString(),
+    // Optimistically add user message to UI
+    const optimisticUserMessage: Message = {
+      id: `temp-${Date.now()}`,
       role: 'user',
       content: prompt,
-      timestamp: new Date(),
-      messageIndex: nextIndex
+      timestamp: new Date().toISOString(),
+      filesSnapshot: scene.files
     }
-    setMessages((prev) => [...prev, userMessage])
-    setIsProcessing(true)
+    setScene({
+      ...scene,
+      conversation: [...scene.conversation, optimisticUserMessage]
+    })
 
     try {
       // Call AI API to process the prompt and modify files
+      // Server will handle adding messages to conversation
       const result = await api.aiPrompt(scene.id, prompt)
 
-      // Update scene with AI-modified files
+      // Update scene with new files and conversation from server
       setScene(result.scene)
-
-      // Add AI response
-      const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.explanation,
-        timestamp: new Date(),
-        messageIndex: nextIndex + 1
-      }
-      setMessages((prev) => [...prev, aiMessage])
     } catch (error: any) {
       console.error('Failed to process prompt:', error)
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `❌ Error: ${error.message || error}`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      // Revert optimistic update and show error
+      setScene(scene)
+      alert(`Error: ${error.message || error}`)
     } finally {
       setIsProcessing(false)
     }
@@ -104,22 +98,10 @@ export function App() {
       // Then build
       await api.buildScene(scene.id)
 
-      const buildMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `✅ Build successful! Scene compiled and ready.`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, buildMessage])
+      alert('✅ Build successful! Scene compiled and ready.')
     } catch (error) {
       console.error('Build failed:', error)
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `❌ Build failed: ${error}`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      alert(`❌ Build failed: ${error}`)
     } finally {
       setIsBuilding(false)
     }
@@ -131,73 +113,40 @@ export function App() {
     try {
       const result = await api.resetConversation(scene.id)
       setScene(result.scene)
-      setMessages([])
-      setViewingSnapshotIndex(null)
+      setViewingSnapshotId(null)
       setSnapshotFiles(null)
-
-      const resetMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: '🔄 Conversation reset. Starting fresh!',
-        timestamp: new Date()
-      }
-      setMessages([resetMessage])
+      alert('🔄 Conversation reset. Starting fresh!')
     } catch (error: any) {
       console.error('Reset failed:', error)
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `❌ Reset failed: ${error.message || error}`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      alert(`❌ Reset failed: ${error.message || error}`)
     }
   }
 
-  const handleViewSnapshot = async (messageIndex: number) => {
+  const handleViewSnapshot = async (messageId: string) => {
     if (!scene) return
 
     try {
-      const result = await api.getSnapshot(scene.id, messageIndex)
+      const result = await api.getSnapshot(scene.id, messageId)
       setSnapshotFiles(result.files)
-      setViewingSnapshotIndex(messageIndex)
+      setViewingSnapshotId(messageId)
     } catch (error: any) {
       console.error('Failed to view snapshot:', error)
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `❌ Failed to view snapshot: ${error.message || error}`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      alert(`❌ Failed to view snapshot: ${error.message || error}`)
     }
   }
 
-  const handleRevertSnapshot = async (messageIndex: number) => {
+  const handleRevertSnapshot = async (messageId: string) => {
     if (!scene) return
 
     try {
-      const result = await api.revertToSnapshot(scene.id, messageIndex)
+      const result = await api.revertToSnapshot(scene.id, messageId)
       setScene(result.scene)
-      setViewingSnapshotIndex(null)
+      setViewingSnapshotId(null)
       setSnapshotFiles(null)
-
-      const revertMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `🔄 ${result.message}`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, revertMessage])
+      alert(`🔄 ${result.message}`)
     } catch (error: any) {
       console.error('Failed to revert snapshot:', error)
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `❌ Failed to revert: ${error.message || error}`,
-        timestamp: new Date()
-      }
-      setMessages((prev) => [...prev, errorMessage])
+      alert(`❌ Failed to revert: ${error.message || error}`)
     }
   }
 
@@ -232,17 +181,19 @@ export function App() {
           onViewSnapshot={handleViewSnapshot}
           onRevertSnapshot={handleRevertSnapshot}
           isProcessing={isProcessing}
-          viewingSnapshotIndex={viewingSnapshotIndex}
+          viewingSnapshotId={viewingSnapshotId}
         />
       </div>
 
       {/* Right Panel - Editor */}
       <div style={{ flex: 1 }}>
         <EditorPanel
+          sceneId={scene.id}
           files={snapshotFiles || scene.files}
           onFileChange={handleFileChange}
           onBuild={handleBuild}
           isBuilding={isBuilding}
+          viewingSnapshotId={viewingSnapshotId}
         />
       </div>
     </div>
