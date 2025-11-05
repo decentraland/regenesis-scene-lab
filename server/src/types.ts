@@ -7,6 +7,8 @@ import type {
   IFetchComponent
 } from '@well-known-components/interfaces'
 import { metricDeclarations } from './metrics'
+import { ISceneStorageComponent } from './adapters/scene-storage'
+import { IAIServiceComponent } from './adapters/ai-service'
 
 export type GlobalContext = {
   components: BaseComponents
@@ -52,40 +54,27 @@ export type SceneFiles = {
 }
 
 export type ConversationMessage = {
+  id: string // Unique identifier for this message/snapshot
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
   filesSnapshot: SceneFiles
 }
 
+export type SceneExport = {
+  entityId: string
+  hashedFiles: Map<string, Buffer> // hash -> file content
+  about: any // AboutResponse from @dcl/protocol
+}
+
 export type Scene = {
   id: string
   name: string
-  files: SceneFiles
+  files: SceneFiles // Source files (TypeScript)
+  builtFiles?: SceneFiles // Built files (JavaScript) - cached after build
   conversation: ConversationMessage[]
+  export?: SceneExport // Current scene export
+  snapshotExports: Map<string, SceneExport> // messageId -> snapshot export
   createdAt: Date
   updatedAt: Date
-}
-
-export type ISceneStorageComponent = {
-  createFromTemplate(templateId: string, name: string): Promise<Scene>
-  getScene(sceneId: string): Promise<Scene | null>
-  updateScene(sceneId: string, files: SceneFiles): Promise<Scene>
-  addConversationMessage(sceneId: string, message: ConversationMessage): Promise<Scene>
-  resetConversation(sceneId: string): Promise<Scene>
-  getMessageSnapshot(sceneId: string, messageIndex: number): Promise<SceneFiles>
-  revertToSnapshot(sceneId: string, messageIndex: number): Promise<Scene>
-  deleteScene(sceneId: string): Promise<void>
-  listScenes(): Promise<Scene[]>
-}
-
-export type IAIServiceComponent = {
-  generateSceneModification(
-    prompt: string,
-    currentFiles: SceneFiles,
-    conversationHistory: ConversationMessage[]
-  ): Promise<{
-    files: SceneFiles
-    explanation: string
-  }>
 }

@@ -1,12 +1,24 @@
 import { Lifecycle } from '@well-known-components/interfaces'
 import { setupRouter } from './controllers/routes'
 import { AppComponents, GlobalContext, TestComponents } from './types'
+import { initializeBuildWorkspace } from './logic/build-workspace'
 
 // this function wires the business logic (adapters & controllers) with the components (ports)
 export async function main(program: Lifecycle.EntryPointParameters<AppComponents | TestComponents>) {
   const { components, startComponents } = program
   const globalContext: GlobalContext = {
     components
+  }
+
+  // Initialize shared build workspace with node_modules (for fast builds with symlinks)
+  const logger = components.logs.getLogger('service')
+  logger.info('Initializing build workspace...')
+  try {
+    await initializeBuildWorkspace()
+    logger.info('✓ Build workspace ready')
+  } catch (error: any) {
+    logger.error(`Failed to initialize build workspace: ${error.message || error}`)
+    throw error
   }
 
   // Add CORS middleware

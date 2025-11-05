@@ -19,6 +19,12 @@ export async function createSceneHandler(
     const scene = await sceneStorage.createFromTemplate(templateId, name)
     logger.info(`Created scene ${scene.id} from template ${templateId}`)
 
+    // Export scene for Bevy preview (async, don't block response)
+    const baseUrl = `http://localhost:3001/scenes/${scene.id}`
+    sceneStorage.exportScene(scene.id, baseUrl).catch((error) => {
+      logger.error(`Failed to export scene ${scene.id}:`, error)
+    })
+
     return {
       status: 200,
       body: scene
